@@ -426,6 +426,7 @@ mod tests {
     use clubcard_crlite::{CRLiteClubcard, CRLiteCoverage, CRLiteQuery, Encoding};
 
     use super::*;
+    use crate::intermediates::IntermediatesConfig;
     use crate::revocation::{CertSerial, CtTimestamp, IssuerSpkiHash, RevocationConfig};
 
     #[test]
@@ -1208,6 +1209,7 @@ mod tests {
         Config {
             cache_dir: dir.to_owned(),
             revocation: RevocationConfig::default(),
+            intermediates: IntermediatesConfig::default(),
         }
     }
 

@@ -49,7 +49,7 @@ fn config_unknown_fields() {
           |
         1 | cache_dir = "tests/data/config_unknown_fields/"
           | ^^^^^^^^^
-        unknown field `cache_dir`, expected `cache-dir` or `revocation`
+        unknown field `cache_dir`, expected one of `cache-dir`, `revocation`, `intermediates`
 
 
     Location:
@@ -90,6 +90,10 @@ fn show_config_fixpoint() {
     cache-dir = "not-exist/"
 
     [revocation]
+    fetch-url = ""
+
+    [intermediates]
+    enabled = false
     fetch-url = ""
 
     ----- stderr -----
