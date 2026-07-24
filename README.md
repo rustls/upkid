@@ -70,6 +70,13 @@ See the [documentation](http://docs.rs/rustls-upki) or [example code](https://gi
 Error: Custom { kind: InvalidData, error: InvalidCertificate(Revoked) }
 ```
 
+### Consuming cached data directly
+
+The revocation data provided by `upki fetch` can also be consumed
+directly by processing the revocation cache directory `index.bin`, and
+accompanying serialized clubcard data, as described by the [C2SP upki-revocation
+specification](https://c2sp.org/upki-revocation@v1.0.0).
+
 # Packaging
 
 See [PACKAGING.md](PACKAGING.md).
