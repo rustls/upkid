@@ -52,7 +52,7 @@ jobs:
           toolchain: ${{ matrix.rustc }}
 
       - name: Install cargo-c
-        uses: taiki-e/cache-cargo-install-action@v3
+        uses: taiki-e/cache-cargo-install-action@v3.0.7
         with:
           tool: cargo-c
 
@@ -99,7 +99,7 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-c
-        uses: taiki-e/cache-cargo-install-action@v3
+        uses: taiki-e/cache-cargo-install-action@v3.0.7
         with:
           tool: cargo-c
 

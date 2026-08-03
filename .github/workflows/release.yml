@@ -128,7 +128,7 @@ jobs:
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
       - name: "Install cargo-c (for the FFI cdylib builds)"
-        uses: "taiki-e/cache-cargo-install-action@v3"
+        uses: "taiki-e/cache-cargo-install-action@v3.0.7"
         if: "${{ contains(join(matrix.targets), 'apple-darwin') || contains(join(matrix.targets), 'linux-gnu') || contains(join(matrix.targets), 'x86_64-pc-windows-msvc') }}"
         with:
           "tool": "cargo-c"
