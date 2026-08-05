@@ -162,7 +162,7 @@ fn verify_of_empty_intermediates_manifest() {
 fn fetch_of_empty_manifest() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/verify_of_empty_manifest/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -190,7 +190,7 @@ fn fetch_of_empty_manifest() {
 fn full_fetch() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -227,7 +227,7 @@ fn full_fetch() {
 fn full_fetch_and_incremental_update() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -328,7 +328,7 @@ fn full_fetch_and_incremental_update() {
 fn typical_incremental_fetch() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     fs::copy(
         "tests/data/typical/revocation/manifest.json",
@@ -387,7 +387,7 @@ fn typical_incremental_fetch() {
 fn typical_incremental_fetch_dry_run() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
     fs::copy(
         "tests/data/typical/revocation/manifest.json",
         temp.path()
@@ -471,9 +471,12 @@ fn list_dir(path: &Path) -> Vec<String> {
     list
 }
 
-fn temp_dir_and_config(fetch_url: &str) -> (TempDir, PathBuf, SettingsBindDropGuard) {
+fn temp_dir_and_config(
+    fetch_url: &str,
+    config_write: impl FnOnce(&TempDir, &str),
+) -> (TempDir, PathBuf, SettingsBindDropGuard) {
     let temp = TempDir::new().unwrap();
-    write_config(&temp, fetch_url);
+    config_write(&temp, fetch_url);
 
     let mut settings = insta::Settings::clone_current();
     // remove tempdirs references
