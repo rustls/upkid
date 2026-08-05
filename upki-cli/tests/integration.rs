@@ -224,6 +224,40 @@ fn full_fetch() {
 }
 
 #[test]
+fn full_fetch_of_intermediates() {
+    let _filters = apply_common_filters();
+    let (server, _filters) = http_server("tests/data/typical-intermediates/");
+    let (temp, config_file, _filters) =
+        temp_dir_and_config(server.url(), write_config_with_intermediates);
+
+    assert_cmd_snapshot!(
+        upki()
+            .arg("--config-file")
+            .arg(config_file)
+            .arg("fetch"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    assert_snapshot!(
+        server.into_log(),
+        @r"
+    GET /revocation/manifest.json  ->  200 OK (79 bytes)
+    GET /intermediates/manifest.json  ->  200 OK (532 bytes)
+    GET /intermediates/01.pem  ->  200 OK (1265 bytes)
+    GET /intermediates/02.pem  ->  200 OK (1241 bytes)
+    GET /intermediates/ff.pem  ->  200 OK (1103 bytes)
+    ");
+    assert_eq!(
+        list_dir(&temp.path().join("intermediates")),
+        vec!["01.pem", "02.pem", "ff.pem", "manifest.json"]
+    );
+}
+
+#[test]
 fn full_fetch_and_incremental_update() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
@@ -498,6 +532,23 @@ fn write_config(temp: &TempDir, fetch_url: &str) {
             "cache-dir=\"{}\"\n\
             [revocation]\n\
             fetch-url=\"{fetch_url}revocation/\"\n",
+            temp.path().display(),
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+}
+
+fn write_config_with_intermediates(temp: &TempDir, fetch_url: &str) {
+    fs::write(
+        temp.path().join("config.toml"),
+        format!(
+            "cache-dir=\"{}\"\n\
+                    [revocation]\n\
+                    fetch-url=\"{fetch_url}revocation/\"\n\
+                    [intermediates]\n\
+                    enabled=true\n\
+                    fetch-url=\"{fetch_url}intermediates/\"\n",
             temp.path().display(),
         )
         .as_bytes(),
