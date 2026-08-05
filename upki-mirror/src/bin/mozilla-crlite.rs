@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use aws_lc_rs::digest::{SHA256, digest};
 use clap::{Parser, ValueEnum};
 use eyre::{Context, Report, anyhow};
-use upki::revocation::{Manifest, ManifestFile};
+use upki::data::{Manifest, ManifestFile};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Report> {

@@ -22,8 +22,8 @@ use std::process::ExitCode;
 use tracing::{debug, info};
 
 use super::index::INDEX_BIN;
-use super::{Error, Index, Manifest, ManifestFile};
-use crate::{Config, sha256};
+use super::{Error, Index, Manifest};
+use crate::{Config, data, sha256};
 
 /// Update the local revocation cache by fetching updates over the network.
 ///
@@ -36,12 +36,13 @@ pub async fn fetch(dry_run: bool, config: &Config) -> Result<ExitCode, Error> {
         "fetching {} into {:?}...",
         &config.revocation.fetch_url, &cache_dir,
     );
-    let old_manifest = Manifest::from_config(config).ok();
 
     FetchContext {
         cache_dir,
         fetch_url: &config.revocation.fetch_url,
-        old_manifest,
+        old_manifest: Manifest::from_config(config)
+            .ok()
+            .as_deref(),
         typ: FetchType::Revocation,
     }
     .fetch(dry_run)
@@ -51,7 +52,7 @@ pub async fn fetch(dry_run: bool, config: &Config) -> Result<ExitCode, Error> {
 pub(crate) struct FetchContext<'a> {
     pub(crate) cache_dir: PathBuf,
     pub(crate) fetch_url: &'a str,
-    pub(crate) old_manifest: Option<Manifest>,
+    pub(crate) old_manifest: Option<&'a data::Manifest>,
     pub(crate) typ: FetchType,
 }
 
@@ -152,7 +153,10 @@ impl Plan {
     /// Form a plan of how to synchronize with the remote server.
     ///
     /// - `manifest` describes the contents of the remote server.
-    pub(crate) fn construct(manifest: &Manifest, ctx: &FetchContext<'_>) -> Result<Self, Error> {
+    pub(crate) fn construct(
+        manifest: &data::Manifest,
+        ctx: &FetchContext<'_>,
+    ) -> Result<Self, Error> {
         let mut steps = Vec::new();
 
         // Collect unwanted files for deletion
@@ -235,7 +239,7 @@ enum PlanStep {
 
     /// Download `file` from `remote` to `local`
     Download {
-        file: ManifestFile,
+        file: data::ManifestFile,
         /// URL.
         remote_url: String,
         /// Full path to output file.
@@ -247,13 +251,13 @@ enum PlanStep {
 
     /// Build and save the index from filter universe metadata.
     SaveIndex {
-        manifest: Manifest,
+        manifest: data::Manifest,
         local_dir: PathBuf,
     },
 
     /// Save the manifest structure
     SaveManifest {
-        manifest: Manifest,
+        manifest: data::Manifest,
         local_dir: PathBuf,
     },
 }
@@ -376,7 +380,7 @@ impl PlanStep {
         Ok(())
     }
 
-    fn download(file: &ManifestFile, remote_url: &str, local: &Path) -> Self {
+    fn download(file: &data::ManifestFile, remote_url: &str, local: &Path) -> Self {
         Self::Download {
             file: file.clone(),
             remote_url: format!("{remote_url}{}", file.filename),

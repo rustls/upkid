@@ -14,6 +14,10 @@ pub(crate) mod sha256;
 
 /// Determining revocation status of publicly trusted certificates.
 pub mod revocation;
+
+/// Common data storage formats.
+pub mod data;
+
 use crate::revocation::RevocationConfig;
 
 /// Foreign function interface.
