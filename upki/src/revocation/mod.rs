@@ -27,7 +27,7 @@ mod fetch;
 #[cfg(feature = "__fetch")]
 pub use fetch::fetch;
 #[cfg(feature = "__fetch")]
-use fetch::{FetchContext, Plan};
+use fetch::{FetchContext, FetchType, Plan};
 
 mod index;
 pub use index::Index;
@@ -83,6 +83,7 @@ impl Manifest {
                 cache_dir: config.revocation_cache_dir(),
                 fetch_url: "https://.../",
                 old_manifest: None,
+                typ: FetchType::Revocation,
             },
         )?;
         match plan.download_bytes() {
