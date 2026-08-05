@@ -25,9 +25,9 @@ use crate::sha256;
 #[cfg(feature = "__fetch")]
 mod fetch;
 #[cfg(feature = "__fetch")]
-use fetch::Plan;
-#[cfg(feature = "__fetch")]
 pub use fetch::fetch;
+#[cfg(feature = "__fetch")]
+use fetch::{FetchContext, Plan};
 
 mod index;
 pub use index::Index;
@@ -77,7 +77,14 @@ impl Manifest {
     #[cfg(feature = "__fetch")]
     pub fn verify(&self, config: &Config) -> Result<ExitCode, Error> {
         self.introduce()?;
-        let plan = Plan::construct(self, &None, "https://.../", &config.revocation_cache_dir())?;
+        let plan = Plan::construct(
+            self,
+            &FetchContext {
+                cache_dir: config.revocation_cache_dir(),
+                fetch_url: "https://.../",
+                old_manifest: None,
+            },
+        )?;
         match plan.download_bytes() {
             0 => Ok(ExitCode::SUCCESS),
             bytes => Err(Error::Outdated(bytes)),

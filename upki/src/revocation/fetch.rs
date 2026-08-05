@@ -36,84 +36,96 @@ pub async fn fetch(dry_run: bool, config: &Config) -> Result<ExitCode, Error> {
         "fetching {} into {:?}...",
         &config.revocation.fetch_url, &cache_dir,
     );
-
-    let manifest_url = format!("{}{MANIFEST_JSON}", config.revocation.fetch_url);
-    #[cfg(feature = "fetch")]
-    let builder = reqwest::Client::builder().use_rustls_tls();
-    #[cfg(all(feature = "fetch-native-tls", not(feature = "fetch")))]
-    let builder = reqwest::Client::builder().use_native_tls();
-
-    let client = builder
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT))
-        .user_agent(format!(
-            "{}/{} ({})",
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_REPOSITORY")
-        ))
-        .build()
-        .map_err(|error| Error::HttpFetch {
-            error: Box::new(error),
-            url: manifest_url.clone(),
-        })?;
-
-    let response = client
-        .get(&manifest_url)
-        .send()
-        .await
-        .map_err(|error| Error::HttpFetch {
-            error: Box::new(error),
-            url: manifest_url.clone(),
-        })?
-        .error_for_status()
-        .map_err(|error| Error::HttpFetch {
-            error: Box::new(error),
-            url: manifest_url.clone(),
-        })?;
-
-    let manifest = response
-        .json::<Manifest>()
-        .await
-        .map_err(|error| Error::FileDecode {
-            error: Box::new(error),
-            path: None,
-        })?;
-
-    manifest.introduce()?;
-
     let old_manifest = Manifest::from_config(config).ok();
 
-    let plan = Plan::construct(
-        &manifest,
-        &old_manifest,
-        &config.revocation.fetch_url,
-        &cache_dir,
-    )?;
+    FetchContext {
+        cache_dir,
+        fetch_url: &config.revocation.fetch_url,
+        old_manifest,
+    }
+    .fetch(dry_run)
+    .await
+}
 
-    if dry_run {
-        println!(
-            "{} steps required ({} bytes to download)",
+pub(crate) struct FetchContext<'a> {
+    pub(crate) cache_dir: PathBuf,
+    pub(crate) fetch_url: &'a str,
+    pub(crate) old_manifest: Option<Manifest>,
+}
+
+impl FetchContext<'_> {
+    pub(crate) async fn fetch(&self, dry_run: bool) -> Result<ExitCode, Error> {
+        let manifest_url = format!("{}{MANIFEST_JSON}", self.fetch_url);
+        #[cfg(feature = "fetch")]
+        let builder = reqwest::Client::builder().use_rustls_tls();
+        #[cfg(all(feature = "fetch-native-tls", not(feature = "fetch")))]
+        let builder = reqwest::Client::builder().use_native_tls();
+
+        let client = builder
+            .timeout(Duration::from_secs(REQUEST_TIMEOUT))
+            .user_agent(format!(
+                "{}/{} ({})",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+                env!("CARGO_PKG_REPOSITORY")
+            ))
+            .build()
+            .map_err(|error| Error::HttpFetch {
+                error: Box::new(error),
+                url: manifest_url.clone(),
+            })?;
+
+        let response = client
+            .get(&manifest_url)
+            .send()
+            .await
+            .map_err(|error| Error::HttpFetch {
+                error: Box::new(error),
+                url: manifest_url.clone(),
+            })?
+            .error_for_status()
+            .map_err(|error| Error::HttpFetch {
+                error: Box::new(error),
+                url: manifest_url.clone(),
+            })?;
+
+        let manifest = response
+            .json::<Manifest>()
+            .await
+            .map_err(|error| Error::FileDecode {
+                error: Box::new(error),
+                path: None,
+            })?;
+
+        manifest.introduce()?;
+
+        let plan = Plan::construct(&manifest, self)?;
+
+        if dry_run {
+            println!(
+                "{} steps required ({} bytes to download)",
+                plan.steps.len(),
+                plan.download_bytes()
+            );
+            for step in plan.steps {
+                println!("- {step}");
+            }
+            return Ok(ExitCode::SUCCESS);
+        }
+
+        info!(
+            "{} steps required ({} bytes to download).",
             plan.steps.len(),
             plan.download_bytes()
         );
+
         for step in plan.steps {
-            println!("- {step}");
+            step.execute(&client).await?;
         }
-        return Ok(ExitCode::SUCCESS);
+
+        info!("success");
+        Ok(ExitCode::SUCCESS)
     }
-
-    info!(
-        "{} steps required ({} bytes to download).",
-        plan.steps.len(),
-        plan.download_bytes()
-    );
-
-    for step in plan.steps {
-        step.execute(&client).await?;
-    }
-
-    info!("success");
-    Ok(ExitCode::SUCCESS)
 }
 
 pub(crate) struct Plan {
@@ -124,24 +136,16 @@ impl Plan {
     /// Form a plan of how to synchronize with the remote server.
     ///
     /// - `manifest` describes the contents of the remote server.
-    /// - `old_manifest` is an alleged current manifest, whose files are left alone.
-    /// - `remote_url` is the base URL.
-    /// - `local` is the path into which files are downloaded.  The caller ensures this exists.
-    pub(crate) fn construct(
-        manifest: &Manifest,
-        old_manifest: &Option<Manifest>,
-        remote_url: &str,
-        local: &Path,
-    ) -> Result<Self, Error> {
+    pub(crate) fn construct(manifest: &Manifest, ctx: &FetchContext<'_>) -> Result<Self, Error> {
         let mut steps = Vec::new();
 
         // Collect unwanted files for deletion
         let mut unwanted_files = HashSet::new();
 
-        if local.exists() {
-            let iter = fs::read_dir(local).map_err(|error| Error::CreateDirectory {
+        if ctx.cache_dir.exists() {
+            let iter = fs::read_dir(&ctx.cache_dir).map_err(|error| Error::CreateDirectory {
                 error,
-                path: local.to_owned(),
+                path: ctx.cache_dir.to_owned(),
             })?;
 
             for entry in iter {
@@ -157,22 +161,22 @@ impl Plan {
                 }
             }
         } else {
-            steps.push(PlanStep::CreateDir(local.to_owned()));
+            steps.push(PlanStep::CreateDir(ctx.cache_dir.to_owned()));
         }
 
         for file in &manifest.files {
             unwanted_files.remove(Path::new(&file.filename));
 
-            let path = local.join(&file.filename);
+            let path = ctx.cache_dir.join(&file.filename);
             match hash_file(&path) {
                 Ok(digest) if digest.as_ref() == file.hash => continue,
                 _ => {}
             }
 
-            steps.push(PlanStep::download(file, remote_url, local));
+            steps.push(PlanStep::download(file, ctx.fetch_url, &ctx.cache_dir));
         }
 
-        if let Some(old_manifest) = &old_manifest {
+        if let Some(old_manifest) = &ctx.old_manifest {
             for file in &old_manifest.files {
                 unwanted_files.remove(Path::new(&file.filename));
             }
@@ -180,16 +184,16 @@ impl Plan {
 
         steps.push(PlanStep::SaveIndex {
             manifest: manifest.clone(),
-            local_dir: local.to_owned(),
+            local_dir: ctx.cache_dir.to_owned(),
         });
 
         steps.push(PlanStep::SaveManifest {
             manifest: manifest.clone(),
-            local_dir: local.to_owned(),
+            local_dir: ctx.cache_dir.to_owned(),
         });
 
         for filename in unwanted_files {
-            steps.push(PlanStep::Delete(local.join(filename)));
+            steps.push(PlanStep::Delete(ctx.cache_dir.join(filename)));
         }
 
         Ok(Self { steps })
