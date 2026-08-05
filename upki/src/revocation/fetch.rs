@@ -17,7 +17,6 @@ use std::io::{self, Read, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
 
 use tracing::{debug, info};
 
@@ -30,7 +29,7 @@ use crate::{Config, data, sha256};
 /// `dry_run` means this call fetches the new manifest, but does not fetch any
 /// required files; but the necessary files are printed to stdout.  Therefore
 /// such a call is not completely "dry" -- perhaps "moist".
-pub async fn fetch(dry_run: bool, config: &Config) -> Result<ExitCode, Error> {
+pub async fn fetch(dry_run: bool, config: &Config) -> Result<(), Error> {
     let cache_dir = config.revocation_cache_dir();
     info!(
         "fetching {} into {:?}...",
@@ -57,7 +56,7 @@ pub(crate) struct FetchContext<'a> {
 }
 
 impl FetchContext<'_> {
-    pub(crate) async fn fetch(&self, dry_run: bool) -> Result<ExitCode, Error> {
+    pub(crate) async fn fetch(&self, dry_run: bool) -> Result<(), Error> {
         let manifest_url = format!("{}{MANIFEST_JSON}", self.fetch_url);
         #[cfg(feature = "fetch")]
         let builder = reqwest::Client::builder().use_rustls_tls();
@@ -113,7 +112,7 @@ impl FetchContext<'_> {
             for step in plan.steps {
                 println!("- {step}");
             }
-            return Ok(ExitCode::SUCCESS);
+            return Ok(());
         }
 
         info!(
@@ -127,7 +126,7 @@ impl FetchContext<'_> {
         }
 
         info!("success");
-        Ok(ExitCode::SUCCESS)
+        Ok(())
     }
 
     fn should_clean_up_file_name(&self, name: &str) -> bool {

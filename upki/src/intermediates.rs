@@ -1,6 +1,4 @@
 use core::ops::Deref;
-#[cfg(feature = "__fetch")]
-use std::process::ExitCode;
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "__fetch")]
@@ -36,13 +34,13 @@ impl Default for IntermediatesConfig {
 /// `dry_run` means this call fetches the new manifest, but does not fetch any
 /// required files; but the necessary files are printed to stdout.
 #[cfg(feature = "__fetch")]
-pub async fn fetch(dry_run: bool, config: &Config) -> Result<ExitCode, Error> {
+pub async fn fetch(dry_run: bool, config: &Config) -> Result<(), Error> {
     let IntermediatesConfig {
         enabled: true,
         fetch_url,
     } = &config.intermediates
     else {
-        return Ok(ExitCode::SUCCESS);
+        return Ok(());
     };
 
     let cache_dir = config.intermediates_cache_dir();
@@ -77,7 +75,7 @@ impl Manifest {
     ///
     /// This performs disk IO but does not perform network IO.
     #[cfg(feature = "__fetch")]
-    pub fn verify(&self, config: &Config) -> Result<ExitCode, Error> {
+    pub fn verify(&self, config: &Config) -> Result<(), Error> {
         self.introduce()?;
         let plan = Plan::construct(
             self,
@@ -89,7 +87,7 @@ impl Manifest {
             },
         )?;
         match plan.download_bytes() {
-            0 => Ok(ExitCode::SUCCESS),
+            0 => Ok(()),
             bytes => Err(Error::Outdated(bytes)),
         }
     }
