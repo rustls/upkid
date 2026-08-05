@@ -90,6 +90,10 @@ impl Config {
     pub(crate) fn revocation_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("revocation")
     }
+
+    pub(crate) fn intermediates_cache_dir(&self) -> PathBuf {
+        self.cache_dir.join("intermediates")
+    }
 }
 
 /// How the path to a configuration file was decided upon.

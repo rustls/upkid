@@ -12,9 +12,11 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use upki::revocation::{Index, RevocationCheckInput};
 #[cfg(feature = "__fetch")]
-use upki::revocation::{Manifest, fetch};
+use upki::intermediates;
+#[cfg(feature = "__fetch")]
+use upki::revocation;
+use upki::revocation::{Index, RevocationCheckInput};
 use upki::{Config, ConfigPath};
 
 #[tokio::main(flavor = "current_thread")]
@@ -47,9 +49,19 @@ async fn main() -> Result<ExitCode, Report> {
 
     Ok(match args.command {
         #[cfg(feature = "__fetch")]
-        Command::Fetch { dry_run } => fetch(dry_run, &config).await?,
+        Command::Fetch { dry_run } => {
+            revocation::fetch(dry_run, &config).await?;
+            intermediates::fetch(dry_run, &config).await?;
+            ExitCode::SUCCESS
+        }
         #[cfg(feature = "__fetch")]
-        Command::Verify => Manifest::from_config(&config)?.verify(&config)?,
+        Command::Verify => {
+            revocation::Manifest::from_config(&config)?.verify(&config)?;
+            if config.intermediates.enabled {
+                intermediates::Manifest::from_config(&config)?.verify(&config)?;
+            }
+            ExitCode::SUCCESS
+        }
         Command::ShowConfigPath => unreachable!(),
         Command::ShowConfig => {
             print!(

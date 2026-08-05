@@ -142,6 +142,23 @@ fn verify_of_empty_manifest() {
 }
 
 #[test]
+fn verify_of_empty_intermediates_manifest() {
+    let _filters = apply_common_filters();
+    assert_cmd_snapshot!(
+        upki()
+            .arg("--config-file")
+            .arg("tests/data/verify_of_empty_intermediates_manifest/config.toml")
+            .arg("verify"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn fetch_of_empty_manifest() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/verify_of_empty_manifest/");
