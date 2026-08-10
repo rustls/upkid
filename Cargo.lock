@@ -392,9 +392,9 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clubcard"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ef474a1b4f0f838c9f513e224f6b5b74ee63a55d9ec42874bfb343b0fce29c8"
+checksum = "1f8c5e5335283f9165377506b6b99cdc34fa9634927b201cca7d79fa4d0c8259"
 dependencies = [
  "rand 0.8.7",
  "serde",
