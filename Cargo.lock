@@ -402,11 +402,11 @@ dependencies = [
 
 [[package]]
 name = "clubcard-crlite"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077423e546548daf83d605a1f8427fe926be6d714585a9807096a71a4b1aa984"
+checksum = "13ce4da6470d99f98f70935dbd70f518aeabba208f27b54cddd87fba1e89418c"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.0",
  "bincode",
  "clubcard",
  "serde",
