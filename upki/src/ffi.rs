@@ -145,6 +145,7 @@ pub struct upki_certificate_der {
 ///
 /// Values 0-15 indicate success (with specific status information).
 /// Values 16 and above indicate errors.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub enum upki_result {
     /// Operation succeeded.
