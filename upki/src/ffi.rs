@@ -216,6 +216,63 @@ pub enum upki_result {
     UPKI_ERR_REVOCATION_TOO_FEW_CERTS = 81,
 }
 
+impl upki_result {
+    /// Convert an error into a static C string
+    pub const fn c_str(&self) -> &'static CStr {
+        match self {
+            Self::UPKI_OK => c"operation succeeded",
+            Self::UPKI_REVOCATION_NOT_COVERED => {
+                c"the certificate is not covered by the revocation data"
+            }
+            Self::UPKI_REVOCATION_REVOKED => c"the certificate has been revoked",
+            Self::UPKI_REVOCATION_NOT_REVOKED => c"the certificate is not revoked",
+            Self::UPKI_ERR_NULL_POINTER => {
+                c"a null pointer was passed where a valid pointer was required"
+            }
+            Self::UPKI_ERR_CONFIG_PATH => c"the config path is not valid utf-8",
+            Self::UPKI_ERR_UNKNOWN => c"an unknown error variant was added to the library",
+            Self::UPKI_ERR_PANICKED => c"an unexpected panic occurred in the library",
+            Self::UPKI_ERR_CONFIG_DECODE => c"failed to decode configuration file",
+            Self::UPKI_ERR_CONFIG_READ => c"failed to read configuration file",
+            Self::UPKI_ERR_NO_CACHE_DIR => c"no cache directory could be found",
+            Self::UPKI_ERR_NO_CONFIG_DIR => c"no configuration directory could be found",
+            Self::UPKI_ERR_NO_HOME_DIR => c"the user's home directory could not be determined",
+            Self::UPKI_ERR_REVOCATION_CREATE_DIR => c"failed to create a directory",
+            Self::UPKI_ERR_REVOCATION_FILE_WRITE => c"failed to write a file",
+            Self::UPKI_ERR_REVOCATION_FILE_DECODE => c"failed to decode a file",
+            Self::UPKI_ERR_REVOCATION_FILE_READ => c"failed to read a file",
+            Self::UPKI_ERR_REVOCATION_HASH_MISMATCH => {
+                c"a downloaded file did not match the expected hash"
+            }
+            Self::UPKI_ERR_REVOCATION_HTTP_FETCH => c"failed to fetch a file over http",
+            Self::UPKI_ERR_REVOCATION_INVALID_BASE64 => c"invalid base64 encoding",
+            Self::UPKI_ERR_REVOCATION_INVALID_END_ENTITY_CERT => {
+                c"the end-entity certificate was invalid"
+            }
+            Self::UPKI_ERR_REVOCATION_INVALID_INTERMEDIATE_CERT => {
+                c"an intermediate certificate was invalid"
+            }
+            Self::UPKI_ERR_REVOCATION_INVALID_LENGTH => {
+                c"a base64-decoded value did not have the expected length"
+            }
+            Self::UPKI_ERR_REVOCATION_INVALID_SCT_ENCODING => c"invalid sct encoding",
+            Self::UPKI_ERR_REVOCATION_INVALID_SCT_IN_CERT => {
+                c"an sct in the end-entity certificate could not be parsed"
+            }
+            Self::UPKI_ERR_REVOCATION_INVALID_TIMESTAMP => c"a timestamp could not be parsed",
+            Self::UPKI_ERR_REVOCATION_MANIFEST_ENCODE => c"failed to encode a manifest file",
+            Self::UPKI_ERR_REVOCATION_NO_ISSUER => {
+                c"no issuer found for the end-entity certificate"
+            }
+            Self::UPKI_ERR_REVOCATION_OUTDATED => c"cache is outdated",
+            Self::UPKI_ERR_REVOCATION_REMOVE_FILE => c"failed to remove a file",
+            Self::UPKI_ERR_REVOCATION_TOO_FEW_CERTS => {
+                c"certificate chain must contain at least 2 certificates"
+            }
+        }
+    }
+}
+
 impl From<Error> for upki_result {
     fn from(err: Error) -> Self {
         match err {
