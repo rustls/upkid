@@ -132,6 +132,7 @@ pub unsafe extern "C" fn upki_openssl_verify_callback(
     }
 
     let Ok(config) = UpkiConfig::new(&x509_ctx) else {
+        x509_ctx.set_error(X509_V_ERR_APPLICATION_VERIFICATION);
         return 0;
     };
 
