@@ -6,7 +6,6 @@ edition.workspace = true
 description = "A rustls verifier with upki revocation integration"
 repository.workspace = true
 rust-version.workspace = true
-readme = "README.md"
 
 [dependencies]
 rustls = { workspace = true, features = ["std", "tls12"] }
