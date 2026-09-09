@@ -5,7 +5,6 @@ rust-version.workspace = true
 edition.workspace = true
 repository.workspace = true
 license.workspace = true
-readme = "README.md"
 description = "Platform-independent browser-grade certificate infrastructure"
 
 [features]
