@@ -2,3 +2,7 @@ cache-dir = "not-exist/"
 
 [revocation]
 fetch-url = ""
+
+[intermediates]
+enabled = false
+fetch-url = ""

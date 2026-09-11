@@ -49,7 +49,7 @@ fn config_unknown_fields() {
           |
         1 | cache_dir = "tests/data/config_unknown_fields/"
           | ^^^^^^^^^
-        unknown field `cache_dir`, expected `cache-dir` or `revocation`
+        unknown field `cache_dir`, expected one of `cache-dir`, `revocation`, `intermediates`
 
 
     Location:
@@ -90,6 +90,10 @@ fn show_config_fixpoint() {
     cache-dir = "not-exist/"
 
     [revocation]
+    fetch-url = ""
+
+    [intermediates]
+    enabled = false
     fetch-url = ""
 
     ----- stderr -----
@@ -138,10 +142,27 @@ fn verify_of_empty_manifest() {
 }
 
 #[test]
+fn verify_of_empty_intermediates_manifest() {
+    let _filters = apply_common_filters();
+    assert_cmd_snapshot!(
+        upki()
+            .arg("--config-file")
+            .arg("tests/data/verify_of_empty_intermediates_manifest/config.toml")
+            .arg("verify"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn fetch_of_empty_manifest() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/verify_of_empty_manifest/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -157,7 +178,7 @@ fn fetch_of_empty_manifest() {
     ");
     assert_snapshot!(
         server.into_log(),
-        @"GET /manifest.json  ->  200 OK (79 bytes)"
+        @"GET /revocation/manifest.json  ->  200 OK (79 bytes)"
     );
     assert_eq!(
         list_dir(&temp.path().join("revocation")),
@@ -169,7 +190,7 @@ fn fetch_of_empty_manifest() {
 fn full_fetch() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -186,10 +207,10 @@ fn full_fetch() {
     assert_snapshot!(
         server.into_log(),
         @r"
-    GET /manifest.json  ->  200 OK (530 bytes)
-    GET /filter1.filter  ->  200 OK (11 bytes)
-    GET /filter2.delta  ->  200 OK (14 bytes)
-    GET /filter3.delta  ->  200 OK (10 bytes)
+    GET /revocation/manifest.json  ->  200 OK (530 bytes)
+    GET /revocation/filter1.filter  ->  200 OK (11 bytes)
+    GET /revocation/filter2.delta  ->  200 OK (14 bytes)
+    GET /revocation/filter3.delta  ->  200 OK (10 bytes)
     ");
     assert_eq!(
         list_dir(&temp.path().join("revocation")),
@@ -203,10 +224,44 @@ fn full_fetch() {
 }
 
 #[test]
+fn full_fetch_of_intermediates() {
+    let _filters = apply_common_filters();
+    let (server, _filters) = http_server("tests/data/typical-intermediates/");
+    let (temp, config_file, _filters) =
+        temp_dir_and_config(server.url(), write_config_with_intermediates);
+
+    assert_cmd_snapshot!(
+        upki()
+            .arg("--config-file")
+            .arg(config_file)
+            .arg("fetch"),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    assert_snapshot!(
+        server.into_log(),
+        @r"
+    GET /revocation/manifest.json  ->  200 OK (79 bytes)
+    GET /intermediates/manifest.json  ->  200 OK (532 bytes)
+    GET /intermediates/01.pem  ->  200 OK (1265 bytes)
+    GET /intermediates/02.pem  ->  200 OK (1241 bytes)
+    GET /intermediates/ff.pem  ->  200 OK (1103 bytes)
+    ");
+    assert_eq!(
+        list_dir(&temp.path().join("intermediates")),
+        vec!["01.pem", "02.pem", "ff.pem", "manifest.json"]
+    );
+}
+
+#[test]
 fn full_fetch_and_incremental_update() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     assert_cmd_snapshot!(
         upki()
@@ -223,10 +278,10 @@ fn full_fetch_and_incremental_update() {
     assert_snapshot!(
         server.into_log(),
         @r"
-    GET /manifest.json  ->  200 OK (530 bytes)
-    GET /filter1.filter  ->  200 OK (11 bytes)
-    GET /filter2.delta  ->  200 OK (14 bytes)
-    GET /filter3.delta  ->  200 OK (10 bytes)
+    GET /revocation/manifest.json  ->  200 OK (530 bytes)
+    GET /revocation/filter1.filter  ->  200 OK (11 bytes)
+    GET /revocation/filter2.delta  ->  200 OK (14 bytes)
+    GET /revocation/filter3.delta  ->  200 OK (10 bytes)
     ");
     assert_eq!(
         list_dir(&temp.path().join("revocation")),
@@ -257,8 +312,8 @@ fn full_fetch_and_incremental_update() {
     assert_snapshot!(
         server.into_log(),
         @r"
-    GET /manifest.json  ->  200 OK (545 bytes)
-    GET /filter4.delta  ->  200 OK (3 bytes)
+    GET /revocation/manifest.json  ->  200 OK (545 bytes)
+    GET /revocation/filter4.delta  ->  200 OK (3 bytes)
     ");
     // filter2 could be deleted, filter4 is new
     assert_eq!(
@@ -289,7 +344,7 @@ fn full_fetch_and_incremental_update() {
     ");
     assert_snapshot!(
         server.into_log(),
-        @"GET /manifest.json  ->  200 OK (545 bytes)");
+        @"GET /revocation/manifest.json  ->  200 OK (545 bytes)");
 
     // filter2 is now deleted
     assert_eq!(
@@ -307,7 +362,7 @@ fn full_fetch_and_incremental_update() {
 fn typical_incremental_fetch() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
 
     fs::copy(
         "tests/data/typical/revocation/manifest.json",
@@ -345,8 +400,8 @@ fn typical_incremental_fetch() {
     assert_snapshot!(
         server.into_log(),
         @r"
-    GET /manifest.json  ->  200 OK (530 bytes)
-    GET /filter2.delta  ->  200 OK (14 bytes)
+    GET /revocation/manifest.json  ->  200 OK (530 bytes)
+    GET /revocation/filter2.delta  ->  200 OK (14 bytes)
     ");
 
     assert_eq!(list_dir(temp.path()), vec!["config.toml", "revocation",],);
@@ -366,7 +421,7 @@ fn typical_incremental_fetch() {
 fn typical_incremental_fetch_dry_run() {
     let _filters = apply_common_filters();
     let (server, _filters) = http_server("tests/data/typical/");
-    let (temp, config_file, _filters) = temp_dir_and_config(server.url());
+    let (temp, config_file, _filters) = temp_dir_and_config(server.url(), write_config);
     fs::copy(
         "tests/data/typical/revocation/manifest.json",
         temp.path()
@@ -397,7 +452,7 @@ fn typical_incremental_fetch_dry_run() {
     exit_code: 0
     ----- stdout -----
     3 steps required (14 bytes to download)
-    - download 14 bytes from http://127.0.0.1:[PORT]/filter2.delta to "[TEMPDIR]/revocation/filter2.delta"
+    - download 14 bytes from http://127.0.0.1:[PORT]/revocation/filter2.delta to "[TEMPDIR]/revocation/filter2.delta"
     - build index from filters into "[TEMPDIR]/revocation"
     - save new manifest into "[TEMPDIR]/revocation"
 
@@ -429,11 +484,9 @@ fn http_server(root: &str) -> (TestHttpServer, SettingsBindDropGuard) {
     // add a filter eliding the (random) port in logs
     let mut current_filters = insta::Settings::clone_current();
     current_filters.add_filter(&format!(":{port}/"), ":[PORT]/");
-    let mut root = PathBuf::from(root);
-    root.push("revocation");
 
     (
-        TestHttpServer::new(("127.0.0.1", port), &root).unwrap(),
+        TestHttpServer::new(("127.0.0.1", port), Path::new(root)).unwrap(),
         current_filters.bind_to_scope(),
     )
 }
@@ -452,9 +505,12 @@ fn list_dir(path: &Path) -> Vec<String> {
     list
 }
 
-fn temp_dir_and_config(fetch_url: &str) -> (TempDir, PathBuf, SettingsBindDropGuard) {
+fn temp_dir_and_config(
+    fetch_url: &str,
+    config_write: impl FnOnce(&TempDir, &str),
+) -> (TempDir, PathBuf, SettingsBindDropGuard) {
     let temp = TempDir::new().unwrap();
-    write_config(&temp, fetch_url);
+    config_write(&temp, fetch_url);
 
     let mut settings = insta::Settings::clone_current();
     // remove tempdirs references
@@ -475,7 +531,24 @@ fn write_config(temp: &TempDir, fetch_url: &str) {
         format!(
             "cache-dir=\"{}\"\n\
             [revocation]\n\
-            fetch-url=\"{fetch_url}\"\n",
+            fetch-url=\"{fetch_url}revocation/\"\n",
+            temp.path().display(),
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+}
+
+fn write_config_with_intermediates(temp: &TempDir, fetch_url: &str) {
+    fs::write(
+        temp.path().join("config.toml"),
+        format!(
+            "cache-dir=\"{}\"\n\
+                    [revocation]\n\
+                    fetch-url=\"{fetch_url}revocation/\"\n\
+                    [intermediates]\n\
+                    enabled=true\n\
+                    fetch-url=\"{fetch_url}intermediates/\"\n",
             temp.path().display(),
         )
         .as_bytes(),

@@ -1,0 +1,21 @@
+{
+  "generated_at": 1765445031,
+  "comment": "typical test manifest for intermediates",
+  "files": [
+    {
+      "filename": "01.pem",
+      "size": 1265,
+      "hash": "e1b2101ca9bbe7efd8056da198db614d0af067c877b751c167d4f645a0b85621"
+    },
+    {
+      "filename": "02.pem",
+      "size": 1241,
+      "hash": "2181939592dc7ec156e9d11e927733465346978e6d8b95bdd4d8195db3414118"
+    },
+    {
+      "filename": "ff.pem",
+      "size": 1103,
+      "hash": "cf2ea11741268b27a36f90324a068b2e7c07d656c6455b31e9c986d080d2360d"
+    }
+  ]
+}

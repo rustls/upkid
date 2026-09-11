@@ -12,10 +12,10 @@ use std::path::PathBuf;
 use clubcard_crlite::TimestampInterval;
 use clubcard_crlite::{CRLiteClubcard, CRLiteStatus, LogId, Timestamp};
 
-#[cfg(feature = "__fetch")]
-use super::Manifest;
 use super::{Error, RevocationCheckInput, RevocationStatus};
 use crate::Config;
+#[cfg(feature = "__fetch")]
+use crate::data::Manifest;
 
 /// Binary-encoded index of universe metadata for all filters in a manifest.
 ///
@@ -426,6 +426,7 @@ mod tests {
     use clubcard_crlite::{CRLiteClubcard, CRLiteCoverage, CRLiteQuery, Encoding};
 
     use super::*;
+    use crate::intermediates::IntermediatesConfig;
     use crate::revocation::{CertSerial, CtTimestamp, IssuerSpkiHash, RevocationConfig};
 
     #[test]
@@ -1208,6 +1209,7 @@ mod tests {
         Config {
             cache_dir: dir.to_owned(),
             revocation: RevocationConfig::default(),
+            intermediates: IntermediatesConfig::default(),
         }
     }
 
