@@ -1,0 +1,10 @@
+[Unit]
+Description=Run upki fetch every 2 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
