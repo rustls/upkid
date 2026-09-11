@@ -3,16 +3,19 @@
 use core::ffi::{c_long, c_void};
 use core::marker::PhantomData;
 use core::ptr;
+use std::ffi::CStr;
 use std::os::raw::c_int;
 use std::slice;
 use std::sync::LazyLock;
 
 use openssl_sys::{
-    CRYPTO_EX_DATA, CRYPTO_EX_INDEX_SSL_CTX, CRYPTO_get_ex_new_index, OPENSSL_free, OPENSSL_sk_num,
-    OPENSSL_sk_value, SSL, SSL_CTX, SSL_CTX_get_ex_data, SSL_CTX_set_ex_data, SSL_get_SSL_CTX,
-    SSL_get_ex_data_X509_STORE_CTX_idx, X509, X509_STORE_CTX, X509_STORE_CTX_get_error_depth,
-    X509_STORE_CTX_get_ex_data, X509_STORE_CTX_get0_chain, X509_STORE_CTX_set_error,
-    X509_V_ERR_APPLICATION_VERIFICATION, X509_V_ERR_CERT_REVOKED, i2d_X509, stack_st_X509,
+    CRYPTO_EX_DATA, CRYPTO_EX_INDEX_SSL_CTX, CRYPTO_get_ex_new_index, ERR_PACK, ERR_STRING_DATA,
+    ERR_get_next_error_library, ERR_load_strings, ERR_new, ERR_set_debug, ERR_set_error,
+    OPENSSL_free, OPENSSL_sk_num, OPENSSL_sk_value, SSL, SSL_CTX, SSL_CTX_get_ex_data,
+    SSL_CTX_set_ex_data, SSL_get_SSL_CTX, SSL_get_ex_data_X509_STORE_CTX_idx, X509, X509_STORE_CTX,
+    X509_STORE_CTX_get_error_depth, X509_STORE_CTX_get_ex_data, X509_STORE_CTX_get0_chain,
+    X509_STORE_CTX_set_error, X509_V_ERR_APPLICATION_VERIFICATION, X509_V_ERR_CERT_REVOKED,
+    i2d_X509, stack_st_X509,
 };
 use rustls_pki_types::CertificateDer;
 use upki::ffi::{
@@ -85,7 +88,8 @@ pub unsafe extern "C" fn upki_openssl_set_config(ctx: *mut SSL_CTX, config: *con
 /// the `X509_V_ERR_APPLICATION_VERIFICATION` error on `x509_ctx` (using
 /// `X509_STORE_CTX_set_error(3SSL)`).
 ///
-/// On unexpected/unrecoverable errors, this function returns 0.
+/// On unexpected/unrecoverable errors, this function returns 0 and may add a report
+/// to the OpenSSL error stack giving more detail.
 ///
 /// # Safety
 ///
@@ -131,8 +135,12 @@ pub unsafe extern "C" fn upki_openssl_verify_callback(
         return 0;
     }
 
-    let Ok(config) = UpkiConfig::new(&x509_ctx) else {
-        return 0;
+    let config = match UpkiConfig::new(&x509_ctx) {
+        Ok(config) => config,
+        Err(e) => {
+            x509_ctx.set_detailed_error(X509_V_ERR_APPLICATION_VERIFICATION, e, line!());
+            return 0;
+        }
     };
 
     // SAFETY: `upki_check_revocation` requires:
@@ -151,8 +159,8 @@ pub unsafe extern "C" fn upki_openssl_verify_callback(
             preverify_ok = 0;
         }
         upki_result::UPKI_REVOCATION_NOT_COVERED | upki_result::UPKI_REVOCATION_NOT_REVOKED => {}
-        _e => {
-            x509_ctx.set_error(X509_V_ERR_APPLICATION_VERIFICATION);
+        e => {
+            x509_ctx.set_detailed_error(X509_V_ERR_APPLICATION_VERIFICATION, e, line!());
             preverify_ok = 0;
         }
     }
@@ -186,6 +194,30 @@ impl<'a> BorrowedX509StoreCtx<'a> {
         // SAFETY: the input pointer is valid, because it comes from our reference.
         // OpenSSL does not document any other preconditions.
         unsafe { X509_STORE_CTX_set_error(ptr::from_mut(self.0), err) };
+    }
+
+    fn set_detailed_error(&mut self, verify_err: i32, upki_error: upki_result, calling_line: u32) {
+        self.set_error(verify_err);
+
+        // Lazy init library code, well outside any manipulation of the openssl error stack.
+        let lib = *UPKI_ERR_LIB;
+
+        // SAFETY: out of our hands (no parameters or return value)
+        unsafe { ERR_new() };
+
+        // SAFETY: file C-string is static, see its safety comment for argument that it is zero-terminated.
+        unsafe { ERR_set_debug(THIS_FILE_CSTR.as_ptr(), calling_line as c_int, ptr::null()) };
+
+        // SAFETY: format C-string is static, so cannot contain inappropriate specifiers.
+        // single parameter is a further static C-string, as expected by %s.
+        unsafe {
+            ERR_set_error(
+                lib,
+                upki_error as c_int,
+                c"%s".as_ptr(),
+                UNEXPECTED_UPKI_ERROR.as_ptr(),
+            )
+        };
     }
 
     fn upki_config_from_ssl_ctx(&self) -> *const upki_config {
@@ -348,6 +380,51 @@ unsafe extern "C" fn ssl_ctx_upki_config_free(
     // This matches the precondition of `upki_config_free`.
     unsafe { upki_config_free(config.cast()) };
 }
+
+static UPKI_ERR_LIB: LazyLock<c_int> = LazyLock::new(|| {
+    // SAFETY: no safety pre- or post-conditions. may return 0 on error.
+    let lib = unsafe { ERR_get_next_error_library() };
+
+    let mut error_strings = Vec::new();
+
+    // library name reserves error 0.
+    error_strings.push(ERR_STRING_DATA {
+        error: ERR_PACK(lib, 0, 0),
+        string: c"upki".as_ptr(),
+    });
+
+    for err in upki_result::ALL {
+        if matches!(err, upki_result::UPKI_OK) {
+            continue;
+        }
+        error_strings.push(ERR_STRING_DATA {
+            error: ERR_PACK(lib, 0, *err as i32),
+            string: err.c_str().as_ptr(),
+        });
+    }
+
+    // terminator
+    error_strings.push(ERR_STRING_DATA {
+        error: 0,
+        string: ptr::null(),
+    });
+
+    // SAFETY: `ERR_load_strings` mutates and retains provided pointer, so we
+    // immediately leak it.
+    unsafe {
+        ERR_load_strings(lib, error_strings.as_mut_ptr());
+        core::mem::forget(error_strings);
+    };
+
+    lib
+});
+
+// SAFETY: the parameter to `from_bytes_with_nul_unchecked` always contains a zero byte,
+// thanks to the one added.  `file!()` cannot contain a zero byte in practice.
+static THIS_FILE_CSTR: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked(concat!(file!(), "\0").as_bytes()) };
+
+static UNEXPECTED_UPKI_ERROR: &CStr = c"unexpected upki error";
 
 #[cfg(test)]
 mod test;
